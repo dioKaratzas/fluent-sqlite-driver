@@ -12,51 +12,57 @@ import SQLiteKit
 extension DatabaseConfigurationFactory {
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
-        _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10)
+        _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10), configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: .init(), sqlLogLevel: .debug)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: .init(), sqlLogLevel: .debug, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        dataEncoder: SQLiteDataEncoder
+        dataEncoder: SQLiteDataEncoder,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: .init(), sqlLogLevel: .debug)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: .init(), sqlLogLevel: .debug, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        dataDecoder: SQLiteDataDecoder
+        dataDecoder: SQLiteDataDecoder,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: dataDecoder, sqlLogLevel: .debug)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: dataDecoder, sqlLogLevel: .debug, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        dataEncoder: SQLiteDataEncoder, dataDecoder: SQLiteDataDecoder
+        dataEncoder: SQLiteDataEncoder, dataDecoder: SQLiteDataDecoder,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: dataDecoder, sqlLogLevel: .debug)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: dataDecoder, sqlLogLevel: .debug, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        sqlLogLevel: Logger.Level?
+        sqlLogLevel: Logger.Level?,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: .init(), sqlLogLevel: sqlLogLevel)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: .init(), sqlLogLevel: sqlLogLevel, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        dataEncoder: SQLiteDataEncoder, sqlLogLevel: Logger.Level?
+        dataEncoder: SQLiteDataEncoder, sqlLogLevel: Logger.Level?,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: .init(), sqlLogLevel: sqlLogLevel)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: dataEncoder, dataDecoder: .init(), sqlLogLevel: sqlLogLevel, configureConnection: configureConnection)
     }
     /// Shorthand for ``sqlite(_:maxConnectionsPerEventLoop:connectionPoolTimeout:dataEncoder:dataDecoder:sqlLogLevel:)``.
     public static func sqlite(
         _ config: SQLiteConfiguration = .memory, maxConnectionsPerEventLoop: Int = 1, connectionPoolTimeout: TimeAmount = .seconds(10),
-        dataDecoder: SQLiteDataDecoder, sqlLogLevel: Logger.Level?
+        dataDecoder: SQLiteDataDecoder, sqlLogLevel: Logger.Level?,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)? = nil
     ) -> Self {
-        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: dataDecoder, sqlLogLevel: sqlLogLevel)
+        self.sqlite(config, connectionPoolTimeout: connectionPoolTimeout, dataEncoder: .init(), dataDecoder: dataDecoder, sqlLogLevel: sqlLogLevel, configureConnection: configureConnection)
     }
 
     /// Return a configuration factory using the provided parameters.
@@ -74,7 +80,8 @@ extension DatabaseConfigurationFactory {
         connectionPoolTimeout: TimeAmount = .seconds(10),
         dataEncoder: SQLiteDataEncoder,
         dataDecoder: SQLiteDataDecoder,
-        sqlLogLevel: Logger.Level?
+        sqlLogLevel: Logger.Level?,
+        configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)?
     ) -> Self {
         .init {
             FluentSQLiteConfiguration(
@@ -83,7 +90,8 @@ extension DatabaseConfigurationFactory {
                 connectionPoolTimeout: connectionPoolTimeout,
                 dataEncoder: dataEncoder,
                 dataDecoder: dataDecoder,
-                sqlLogLevel: sqlLogLevel
+                sqlLogLevel: sqlLogLevel,
+                configureConnection: configureConnection
             )
         }
     }
@@ -96,12 +104,15 @@ struct FluentSQLiteConfiguration: DatabaseConfiguration {
     let dataEncoder: SQLiteDataEncoder
     let dataDecoder: SQLiteDataDecoder
     let sqlLogLevel: Logger.Level?
+    let configureConnection: (@Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>)?
 
     func makeDriver(for databases: Databases) -> any DatabaseDriver {
-        let db = SQLiteConnectionSource(
-            configuration: self.configuration,
-            threadPool: databases.threadPool
-        )
+        let base = SQLiteConnectionSource(configuration: self.configuration, threadPool: databases.threadPool)
+        let installer: @Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void> = configureConnection ?? { conn, _ in
+            conn.eventLoop.makeSucceededFuture(())
+        }
+        let db = ConfiguringSQLiteConnectionSource(base: base, configureConnection: installer)
+
         let pool = EventLoopGroupConnectionPool(
             source: db,
             maxConnectionsPerEventLoop: 1,
@@ -124,5 +135,26 @@ extension SQLiteConfiguration {
 
     public static var memory: Self {
         .init(storage: .memory)
+    }
+}
+
+struct ConfiguringSQLiteConnectionSource: ConnectionPoolSource, Sendable {
+    typealias Connection = SQLiteConnection
+
+    let base: SQLiteConnectionSource
+    let configureConnection: @Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>
+
+    init(
+        base: SQLiteConnectionSource,
+        configureConnection: @escaping @Sendable (SQLiteConnection, Logger) -> EventLoopFuture<Void>
+    ) {
+        self.base = base
+        self.configureConnection = configureConnection
+    }
+
+    func makeConnection(logger: Logger, on eventLoop: any EventLoop) -> EventLoopFuture<SQLiteConnection> {
+        base.makeConnection(logger: logger, on: eventLoop).flatMap { conn in
+            configureConnection(conn, logger).map { conn }
+        }
     }
 }

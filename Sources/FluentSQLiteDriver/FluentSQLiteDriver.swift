@@ -6,7 +6,7 @@ import SQLiteKit
 import SQLiteNIO
 
 struct FluentSQLiteDriver: DatabaseDriver {
-    let pool: EventLoopGroupConnectionPool<SQLiteConnectionSource>
+    let pool: EventLoopGroupConnectionPool<ConfiguringSQLiteConnectionSource>
     let dataEncoder: SQLiteDataEncoder
     let dataDecoder: SQLiteDataDecoder
     let sqlLogLevel: Logger.Level?
@@ -36,7 +36,7 @@ struct FluentSQLiteDriver: DatabaseDriver {
 }
 
 struct ConnectionPoolSQLiteDatabase: SQLiteDatabase {
-    let pool: EventLoopConnectionPool<SQLiteConnectionSource>
+    let pool: EventLoopConnectionPool<ConfiguringSQLiteConnectionSource>
     let logger: Logger
 
     var eventLoop: any EventLoop {
